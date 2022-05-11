@@ -147,7 +147,6 @@ async def say_hello(ctx):
 @bot.event
 async def on_ready():
     print(f"Bert connected to discord")
-    get_stats()
 
 args = parse_args()
 print("connecting to discord")
