@@ -1,4 +1,4 @@
-<h1 align="center"> Bert </h1> <br>
+<h1>Bert</h1> <br>
 The movie list bot
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
