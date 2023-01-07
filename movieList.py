@@ -7,7 +7,7 @@ import logging
 import random
 import pickle
 import re
-from imdb import IMDb
+from imdb import Cinemagoer
 
 IMDB_ID = "imdbID"
 MAIN_INFO_KEY = "main"
@@ -89,7 +89,7 @@ class MovieList():
 
     @logged
     def __init__(self):
-        self.ia = IMDb()
+        self.ia = Cinemagoer()
         self.last_movie_mentioned = ""
         self.search_cache = {}
 
