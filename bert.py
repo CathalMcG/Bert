@@ -1,6 +1,6 @@
 """
-A discord bot for my discord server
-it keeps a movie list
+Bert lives in your discord server and remembers
+a list of movies for you.
 """
 import argparse
 import random

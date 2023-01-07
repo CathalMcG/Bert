@@ -2,7 +2,8 @@
 *.sublime-project
 *.sublime-workspace
 
-# scripts
+
+# .scripts
 deploy.sh
 
 # secrets
