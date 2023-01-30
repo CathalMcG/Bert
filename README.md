@@ -38,10 +38,10 @@ the name you typed.
 
 `!imdb Muppet` Search imdb for the word "muppet" and post a link to the first result.
   
-`!runtime Muppet Christmas Carol` Searhc imdb for "Muppet Christmas Carol" and post the runtime of the first result.
+`!runtime Muppet Christmas Carol` Search imdb for "Muppet Christmas Carol" and post the runtime of the first result.
 
 
-## Build Process
+## Setup
 
 1. Create a discord application and bot at `discord.com/developers/applications`.
 
@@ -51,4 +51,6 @@ the name you typed.
 
 4. Copy your bot's token from the Bots page on the discord developer site into the `BERT_DISCORD_KEY` variable in `bert_env.sh`.
 
-5. Run `./build.sh`
+## Build process
+
+1. Run `./build.sh`
