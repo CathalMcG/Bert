@@ -8,6 +8,7 @@ import random
 import pickle
 import re
 from imdb import Cinemagoer
+from movieDb import MovieDatabase
 
 IMDB_ID = "imdbID"
 MAIN_INFO_KEY = "main"
@@ -16,7 +17,6 @@ TITLE_KEY = "title"
 LONG_TITLE_KEY = "long imdb title"
 MOVIELIST_FILENAME = "/data/movies.pickle"
 LOG_FILENAME = "/data/movie_list.log"
-PIRATE_SEARCH_BASE = "https://thepiratebay.org/search.php?q="
 IMDB_URL_PATTERN = "imdb\.com/title/tt(\d+)"
 IMDB_URL_BASE = "https://www.imdb.com/title/tt"
 
@@ -42,40 +42,6 @@ def _get_movie_runtime_from_movie_info(movie_info):
     raise Exception(f"no runtime found for {movie_info[TITLE_KEY]}")
 
 @logged
-def _create_initial_movies():
-    return dict()
-
-@logged
-def _save(obj, filename):
-    # print(f"writing {filename} with this data: {obj}")
-    with open(filename, "wb") as f:
-        pickle.dump(obj, f)
-
-@logged
-def _load(filename):
-    with open(filename, "rb") as f:
-        return pickle.load(f)
-
-@logged
-def _save_movies(obj):
-    _save(obj, MOVIELIST_FILENAME)
-
-@logged
-def _load_movies():
-    return _load(MOVIELIST_FILENAME)
-
-@logged
-def _get_movies():
-    try:
-        return _load_movies()
-    except Exception as e:
-        print(f"failed to read file, initializing instead")
-        print(f"previous: {e}")
-        data = _create_initial_movies()
-        _save_movies(data)
-        return data
-
-@logged
 def _match_imdb_url(query):
     url_match = re.search(IMDB_URL_PATTERN, query)
     return url_match
@@ -90,34 +56,30 @@ class MovieList():
     @logged
     def __init__(self):
         self.ia = Cinemagoer()
-        self.last_movie_mentioned = ""
+        self.mdb = MovieDatabase()
+        # server -> movie
+        self.last_movie_mentioned = {}
         self.search_cache = {}
 
     @logged
-    def search_list(self, query):
-        names = self.get_movie_names()
-
-        def matches_query(movie_name):
-            return str.lower(query) in str.lower(movie_name)
-
-        filtered_movie_names = filter(matches_query, names)
-        return list(filtered_movie_names)
+    def search_list(self, server, query):
+        search_result = self.mdb.search_movies_by_name(server, query)
+        return search_result
 
     @logged
-    def pick_random_movie_name(self):
-        names = self.get_movie_names()
-        movie_name = random.choice(list(names))
-        self.last_movie_mentioned = movie_name
+    def pick_random_movie_name(self, server):
+        movie_name = self.mdb.pick_movie(server)
+        self.last_movie_mentioned[server] = movie_name
         return movie_name
 
     @logged
-    def get_movie_names(self):
-        return list(_get_movies().keys())
+    def get_movie_names(self, server):
+        return self.mdb.get_list_for_server(server)
 
     @logged
-    def add_movie(self, movie_query):
+    def add_movie(self, server, user, movie_query):
         if movie_query == None:
-            movie_query = self.last_movie_mentioned
+            movie_query = self.last_movie_mentioned[server]
         url_match = _match_imdb_url(movie_query)
         if url_match:
             imdb_id = url_match.group(1)
@@ -127,51 +89,49 @@ class MovieList():
             movie_info = self._get_movie_info(movie_query)
             movie_name = movie_query
 
-        movies = _get_movies()
-        movies[movie_name] = movie_info
-        _save_movies(movies)
-        self.last_movie_mentioned = movie_name
+        self.mdb.add_movie(
+                server,
+                movie_name,
+                user,
+                movie_info)
+        self.last_movie_mentioned[server] = movie_name
         return movie_name
 
     @logged
-    def remove_movie_name(self, movie_name):
+    def remove_movie_name(self, server, movie_name):
         if movie_name == None:
-            movie_name = self.last_movie_mentioned
-        movies = _get_movies()
-        if movie_name in movies:
-            del movies[movie_name]
-            _save_movies(movies)
-            return movie_name
-        return None
+            movie_name = self.last_movie_mentioned[server]
+        self.mdb.delete_movie_by_name(server, movie_name)
+        return movie_name
 
     @logged
-    def correct_movie(self, option):
+    def correct_movie(self, server, user, option):
         if option == None:
-            return self._get_correct_movie_options(self.last_movie_mentioned)
+            return self._get_correct_movie_options(self.last_movie_mentioned[server])
         elif option.isdigit():
-            return self._set_correct_movie_option(int(option))
+            return self._set_correct_movie_option(server, int(option))
         elif _match_imdb_url(option):
-            self.remove_movie_name(self.last_movie_mentioned)
-            return self.add_movie(option)
-        self.last_movie_mentioned = option
+            self.remove_movie_name(server, server, self.last_movie_mentioned[server])
+            return self.add_movie(server, user, option)
+        self.last_movie_mentioned[server] = option
         return self._get_correct_movie_options(option)
 
     @logged
-    def _set_correct_movie_option(self, option_number):
-        search_results = self._search_for_movie(self.last_movie_mentioned, 5)
+    def _set_correct_movie_option(self, server, option_number):
+        search_results = self._search_for_movie(self.last_movie_mentioned[server], 5)
         correct_option = search_results[option_number]
         correct_option_link = _build_imdb_link(correct_option.movieID)
 
-        old_option = self._get_movie_info(self.last_movie_mentioned)
+        old_option = self._get_movie_info(self.last_movie_mentioned[server])
         old_option_caption = old_option[LONG_TITLE_KEY]
 
-        self.remove_movie_name(self.last_movie_mentioned)
+        self.remove_movie_name(self.last_movie_mentioned[server])
         new_option_name = self.add_movie(correct_option_link)
 
         new_option = self._get_movie_info(new_option_name)
         new_option_caption = new_option[LONG_TITLE_KEY]
 
-        new_option_link = self.get_imdb_link(new_option_name)
+        new_option_link = self._get_imdb_link(new_option_name)
         self.last_movie_mentioned = new_option_caption
         return f"Replaced {old_option_caption} with {new_option_caption}\n{new_option_link}"
 
@@ -185,50 +145,28 @@ class MovieList():
         return search_infos
 
     @logged
-    def get_imdb_link(self, movie_name):
+    def get_imdb_link(self, server, movie_name):
+        if movie_name == None:
+            movie_name = self.last_movie_mentioned[server]
+        return self._get_imdb_link(movie_name)
+
+    @logged
+    def get_movies_below_runtime(self, server, runtime):
+        movies = self.mdb.get_movies_below_runtime(server, runtime)
+        return movies
+
+    @logged
+    def pick_random_movie_below_runtime(self, server, runtime):
+        result = self.mdb.pick_random_movie_below_runtime(server, runtime)
+        self.last_movie_mentioned[server] = result
+        return result
+
+    @logged
+    def get_movie_runtime(self, server, movie_name):
         if movie_name is None:
-            movie_name = self.last_movie_mentioned
-        movieId = self._get_movie_id(movie_name)
-        url = f"https://www.imdb.com/title/tt{movieId}"
-        self.last_movie_mentioned = movie_name
-        return url
-
-    @logged
-    def get_pirate_link(self, movie_name):
-        if movie_name is None:
-            movie_name = self.last_movie_mentioned
-        search_url = PIRATE_SEARCH_BASE + movie_name.replace(" ", "+")
-        return search_url
-
-    @logged
-    def get_movies_below_runtime(self, runtime):
-        movies = _get_movies()
-        movie_names = list(movies.keys())
-
-        def check_runtime(movie_name):
-            movie_info = movies[movie_name]
-            try:
-                movie_runtime = _get_movie_runtime_from_movie_info(movie_info)
-                return movie_runtime < runtime
-            except Exception as e:
-                print(e)
-                return False
-
-        filtered_movie_names = filter(check_runtime, movie_names)
-        return list(filtered_movie_names)
-
-    @logged
-    def pick_random_movie_below_runtime(self, runtime):
-        movie_name = random.choice(self.get_movies_below_runtime(runtime))
-        self.last_movie_mentioned = movie_name
-        return movie_name
-
-    @logged
-    def get_movie_runtime(self, movie_name):
-        if movie_name is None:
-            movie_name = self.last_movie_mentioned
+            movie_name = self.last_movie_mentioned[server]
         movie = self._get_movie_info(movie_name)
-        self.last_movie_mentioned = movie_name
+        self.last_movie_mentioned[server] = movie_name
         return _get_movie_runtime_from_movie_info(movie)
 
     @logged
@@ -255,6 +193,13 @@ class MovieList():
         movieId = movie.movieID
         logging.info(f"movieId: {movieId}")
         return movieId
+        
+    @logged
+    def _get_imdb_link(self, movie_name):
+        movieId = self._get_movie_id(movie_name)
+        url = f"https://www.imdb.com/title/tt{movieId}"
+        self.last_movie_mentioned = movie_name
+        return url
 
     @logged
     def _update_movie(self, movie):
@@ -268,12 +213,14 @@ class MovieList():
 
     @logged
     def _get_movie_info(self, movie_name):
-        movies = _get_movies()
-        if  movie_name not in movies or movies[movie_name] is None:
+        results = self.mdb.get_imdb_data(movie_name)
+        if len(results) < 1:
             print(f"fetching data for {movie_name}")
             movie_result = self._search_for_movie(movie_name)
             movie_info = self._update_movie(movie_result)
+        elif len(results) > 1:
+            raise Exception(f"too many results for {movie_name}. Found: {[name for (name, data) in results]}")
         else:
             print(f"reading {movie_name} from cache")
-            movie_info = movies[movie_name]
+            movie_info = results[0][1]
         return movie_info

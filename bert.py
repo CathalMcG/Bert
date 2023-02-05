@@ -4,7 +4,6 @@ a list of movies for you.
 """
 import argparse
 import random
-import pickle
 import discord
 from discord.ext import commands
 from movieList import MovieList
@@ -49,7 +48,7 @@ def create_movies_embed(title, movies):
 @bot.command(name="add", description="adds a movie to the list. either a movie name or imdb link")
 async def add_movie(ctx, *, movie=None):
     try:
-        movie_name = ml.add_movie(movie)
+        movie_name = ml.add_movie(ctx.guild, ctx.author.id, movie)
         link = ml.get_imdb_link(movie_name)
         await ctx.send(f"Added {movie_name} to the list. (say !nope if that's the wrong one) ({link})")
     except Exception as e:
@@ -66,10 +65,10 @@ async def get_movie_runtime(ctx, *, movie_name=None):
     " (eg !listmovies 90 to only list movies below 90 minutes)")
 async def list_movies(ctx, runtime=None):
     if runtime is None:
-        movies = ml.get_movie_names()
+        movies = ml.get_movie_names(ctx.guild)
         title = "Movie list:\n"
     else:
-        movies = ml.get_movies_below_runtime(int(runtime))
+        movies = ml.get_movies_below_runtime(ctx.guild, int(runtime))
         title = f"Movie list (< {runtime} minutes):\n"
 
     movie_embed = create_movies_embed(title, movies)
@@ -81,15 +80,15 @@ async def list_movies(ctx, runtime=None):
     " minutes (eg !pickmovie 90 to only pick movies below 90 minutes")
 async def pick_movie(ctx, runtime=None):
     if runtime is None:
-        movie_name = ml.pick_random_movie_name()
+        movie_name = ml.pick_random_movie_name(ctx.guild)
     else:
-        movie_name = ml.pick_random_movie_below_runtime(int(runtime))
-    movie_link = ml.get_imdb_link(movie_name)
+        movie_name = ml.pick_random_movie_below_runtime(ctx.guild, int(runtime))
+    movie_link = ml.get_imdb_link(server, movie_name)
     await ctx.send(f"I chose {movie_name}\n{movie_link}")
 
 @bot.command(name="remove", description="remove a movie from the list")
 async def remove_movie(ctx, *, movie=None):
-    removed_movie = ml.remove_movie_name(movie)
+    removed_movie = ml.remove_movie_name(ctx.guild, movie)
     if removed_movie:
         await ctx.send(f"Removed {removed_movie} from the list")
     else:
@@ -115,7 +114,7 @@ def create_nope_list_embed(movie_query, nope_list):
 
 @bot.command(name="nope", description="nope a movie that was just added")
 async def nope_movie(ctx, *, option=None):
-    result = ml.correct_movie(option)
+    result = ml.correct_movie(ctx.guild, ctx.author.id, option)
     if isinstance(result, list):
         nope_list_embed = create_nope_list_embed(option, result)
         await ctx.send(embed=nope_list_embed)
@@ -126,7 +125,7 @@ async def nope_movie(ctx, *, option=None):
 
 @bot.command(name="search", description="search the movie list")
 async def search_movies(ctx, *, query):
-    found_movies = ml.search_list(query)
+    found_movies = ml.search_list(ctx.guild, query)
     if len(found_movies) > 0:
         title = f"Movies matching \"{query}\""
         movie_embed = create_movies_embed(title, found_movies)
@@ -137,7 +136,7 @@ async def search_movies(ctx, *, query):
 
 @bot.command(name="imdb", description="get imdb link for movie")
 async def get_imdb_link(ctx, *, movie_query=None):
-    url = ml.get_imdb_link(movie_query)
+    url = ml.get_imdb_link(ctx.guild, movie_query)
     await ctx.send(url)
 
 @bot.command(name="bert", description="says hello")
