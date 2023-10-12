@@ -56,7 +56,7 @@ class MovieList():
     @logged
     def __init__(self):
         self.ia = Cinemagoer()
-        self.mdb = MovieDatabase()
+        self.mdb = MovieDatabase("./movies.db")
         # server -> movie
         self.last_movie_mentioned = {}
         self.search_cache = {}
@@ -89,11 +89,14 @@ class MovieList():
             movie_info = self._get_movie_info(movie_query)
             movie_name = movie_query
 
+        pickled_data = pickle.dumps(movie_info, pickle.HIGHEST_PROTOCOL)
+        runtime = _get_movie_runtime_from_movie_info(movie_info)
         self.mdb.add_movie(
                 server,
                 movie_name,
                 user,
-                movie_info)
+                runtime,
+                pickled_data)
         self.last_movie_mentioned[server] = movie_name
         return movie_name
 
